@@ -1,0 +1,330 @@
+---
+title: "STAT 184 project"
+subtitle: STAT 184 Final Course Project
+author: Hanzhe Jiang
+date: 13 Aug. 2025
+format: pdf
+---
+
+## Analysis of Airbnb New User Booking
+
+Airbnb is one of the top American companies that holds a marketplace for logging, vacation rentals, and tourism activities. From 2012 to 2014, the user population has increased from 6 million to 50 million. The most recent report shows the number of nights booked has increased to 356.9 million. (2 million users in worldwide) The main idea for this project is how to predict new user's intentions for their first booking through my motivation and method:
+
+1\. Support Destination-Specific-Advertising through User Accommodation
+
+2\. Explore Distributions of the Values of Interest through EDA
+
+3\. Predict or Infer User's First Book Destination from their Information
+
+This process was done by solving Airbnb's Kaggle problems where they wanted Kaggleusers to predict where their users were most likely going to travel based on data from their website, and there's also data from Airbnb where they offer a detailed overview of Airbnb listings worldwide:
+
+•Data source: Kaggle Competition, Airbnb reported source.
+
+•Link: <https://www.kaggle.com/c/airbnb-recruiting-new-user-bookings/data?select=age_gender_bkts.csv.zip>
+
+•Link: <https://www.kaggle.com/datasets/lovishbansal123/>
+
+•[213451 US users, 16 columns, Label Column: Country Destination (12 possible outcomes), and detailed overview of Airbnb listings worldwide]{.underline}
+
+(\@misc{airbnb-recruiting-new-user-bookings,
+
+author = {alokgupta and Anna Montoya and LizSellier and Meghan O'Connell and Wendy Kan},
+
+title = {Airbnb New User Bookings}, year = {2015}, howpublished = {\url{https://kaggle.com/competitions/airbnb-recruiting-new-user-bookings}}, note = {Kaggle} })
+
+There are 5 datasets in cvs form from this two data source I believe could be supplied for this project:
+
+**1.Train_users_2:** Train users contains data on 213.451 users from Airbnb, all data used for identification is replaced by an ID field.
+
+**2.Test users:** Test users contains 62.096 users on which the prediction is supposed to be made, it uses the same format as Train_users with the exception of the date_first_booking and country_destination fields. 
+
+**3.Sessions:** Contains records of user's actions on the website
+
+**4.Age_gender_bkts:** This dataset groups users in the training set into age groups of 5 years difference and shows information about each group's gender and decided country destination. 
+
+**5.Countries:** A summary of the different country destinations and various data on
+
+## Dataset Preview
+
+```{r}
+##I'm going to use the BOAST Style Guide
+library(ggplot2)
+library(dcData)
+library(tidyr)
+library(tibble)
+library(dplyr)
+library(tidyverse)
+library(readr)
+
+train_users <- read_csv("train_users_2.csv")
+head(train_users)
+age_gender_bkts <- read_csv("age_gender_bkts.csv")
+head(age_gender_bkts)
+countries <- read_csv("countries.csv")
+head(countries)
+TestUsers <- read_csv("test_users.csv")
+head(TestUsers)
+```
+
+## **EDA visualization**
+
+### Device usage
+
+Close to 30% of the population use Facebook as their sign up method, and over 70% of the population use basic. Google is not preferred by users as their sign up method.
+
+```{r}
+## New user's sign up method
+train_users %>%
+  count(signup_method) %>%
+  mutate(prop = n / sum(n)) %>%
+  arrange(desc(n)) 
+
+  select(signup_method) %>%
+  group_by(signup_method)%>%
+    
+  ggplot(
+    data = train_users,
+    mapping = aes(
+      x = signup_method, 
+      y = after_stat(prop), 
+      group = 1)
+  ) +
+  geom_bar(
+    color = "black",
+    fill = c("basic" = "yellow",
+             "facebook"   = "blue",
+             "google"  = "red")
+  ) +
+  labs(
+    title = "New Users' Signup Method",
+    x = "Sign up Method",
+    y = "Relative Freq."
+  ) +
+  theme_bw() +
+  scale_y_continuous(
+    labels = scales::percent,
+    expand = expansion(add = c(0, 0.03))
+  )
+```
+
+In the training set, Most people use Desktop web for their first device sign up
+
+```{r}
+train_users %>%
+  count(signup_app) %>%
+  mutate(prop = n / sum(n)) %>%
+  ggplot(
+    aes(
+      x = reorder(signup_app,desc(prop)), 
+      y = prop, 
+      fill = signup_app)) +
+  geom_bar(
+    stat = "identity", 
+    color = "black")+
+  scale_fill_manual(values = c(
+    "Web"   = "#FF9998",
+    "iOS"   = "#99CCFF",
+    "Android" = "#99FF99",
+    "Moweb"   = "#FFCC99" 
+  )) +
+  labs(
+    title = "New User's Signup Device Types",
+    x = "Signup Device Type",
+    y = "Relative Frequency"
+  ) +
+  scale_y_continuous(
+    labels = scales::percent,
+    expand = expansion(add = c(0, 0.03))
+  )
+
+```
+
+More people using Chrome than using Safari as their first browser for signing up.
+
+```{r}
+train_users %>%
+  count(first_browser) %>%                                  
+  mutate(prop = n / sum(n),
+         browser = if_else(
+           prop < 0.02, 
+           "Other", 
+           first_browser)) %>% 
+  group_by(browser) %>%                                    
+  summarise(n = sum(n)) %>%
+  mutate(prop = n / sum(n)) %>%                            
+  ggplot(
+    aes(
+      x = reorder(browser, desc(prop)), 
+      y = prop, 
+      fill = browser)) +
+  geom_col() +
+  scale_y_continuous(
+    labels = scales::percent,
+    expand = expansion(add = c(0, 0.03))
+  )
+```
+
+### User Population
+
+```{r}
+
+# 3.Age distribution 
+train_users %>%
+  select(age)%>%
+  filter(age >= 15 & age <= 100) %>%
+  ggplot(
+    aes(x = age))+
+  geom_histogram(
+    color = "white",
+    fill = "light green", 
+    binwidth = 5
+    ) +
+  labs(
+    title = "New User's Age Distribution", 
+    x = "Age", 
+    y = "Number of age range")+    
+  theme_bw() +
+  scale_y_continuous(
+    expand = expansion(add = c(0, 0.03)) 
+  )
+
+```
+
+Combine the User's Age and gender together.
+
+```{r}
+age_gender <- train_users %>%
+  filter(age >= 15, age <= 100) %>%
+  group_by(age, gender) %>%
+  summarise(n = n())
+ggplot(
+  data = age_gender, 
+  aes(
+    x = age, 
+    y = n, 
+    fill = gender)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(
+    values = c(
+    "MALE" = "#1f77b4",  
+    "FEMALE" = "#d62728",  
+    "-unknown-" = "#ff7f0e",    
+    "OTHER" = "#2ca02c" 
+  )) +
+  labs(
+    title = "Age/Gender Distribution in Train Set",
+    x = "Age",
+    y = "Number of Users",
+    fill = "Gender"
+  ) +
+  theme_minimal()
+```
+
+### Countries
+
+```{r}
+train_users %>%
+  count(country_destination) %>%
+  mutate(prop = n / sum(n)) %>%
+  arrange(desc(prop)) %>%
+  ggplot(
+    aes(
+      x = reorder(country_destination, desc(prop)), 
+      y = prop, 
+      fill = country_destination)) +
+  geom_col(color = "black") +
+  labs(
+    title = "Distribution of Country Destinations",
+    x = "Country Destination",
+    y = "Relative Frequency"
+  ) +
+  scale_y_continuous(
+    labels = scales::percent,
+    expand = expansion(add = c(0, 0.03))
+  )
+
+```
+
+Noticed that there's almost 60% of the training data with Not defined as user's first country destination. So I removed the NDF value and made a pie chart. 70.2% of new user would prefer US as their first destination.
+
+```{r}
+
+MakePie <- function(train_users,country_destination){
+  train_users %>%
+    filter(country_destination != "NDF") %>%
+    count(country_destination) %>%
+    mutate(prop = n / sum(n)) %>%
+  ggplot(
+    aes("", 
+        prop, 
+        fill = country_destination)) +
+  geom_col(
+    color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = scales::percent(prop, 0.1)), 
+            position = position_stack(vjust = 0.5))
+}
+MakePie(train_users, country_destination)
+  
+```
+
+A world map would also be clear way to visualize user's prefernce for the first destination countries
+
+```{r}
+DestCount <- train_users %>%
+  filter(country_destination != "NDF") %>%
+  count(country_destination)
+DestMap <- DestCount %>%
+  left_join(countries, by = "country_destination")
+world_map <- map_data("world")
+ggplot() +
+  geom_map(
+    data = world_map,
+    map = world_map,
+    aes(
+      long, 
+      lat, 
+      map_id = region),
+    color = "white", 
+    fill = "lightgray"
+  ) +
+  geom_point(
+    data = DestMap,
+    aes(x = lng_destination,
+        y = lat_destination,
+        size = n,
+        color = country_destination),
+    alpha = 0.7
+  ) +
+  labs(title = "New User's Popular Booking Destinations")
+```
+
+```{r}
+##device analyse by countries
+train_users %>%
+  filter(country_destination != "NDF") %>%
+  count(signup_app, country_destination) %>%
+  ggplot(
+    aes(x = signup_app, 
+        y = n, 
+        fill = country_destination)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Device Analysis by Country",
+    x = "Device Type",
+    y = "Number of Users",
+    fill = "Country"
+  ) +
+  theme_minimal()
+```
+### In Summary
+
+-   From Analysis, We see majority of the users are people from Age 20 to 40 
+
+-   Majority of Users use Web Desktop, corresponding to Google Chrome and Safari
+
+-   Instead of NDF destination, the most first booking destination is US. 
+
+Therefore, we would like to recommend Airbnb to advertise Local Tourism Locations, primarily to Young Age user population through Ads on mainly on websites, and optimize their phone applications. 
+
+By accurately predicting where a new user will book their first travel experience, Airbnb can improve more personalized content in their community, lower the average waiting time of new customer's first booking, and better forecast new user's demand.
